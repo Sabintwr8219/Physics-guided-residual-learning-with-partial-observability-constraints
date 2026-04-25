@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Virtual environments
+.venv/
+venv/
+env/
+dnn_env/
+
+# IDE/system
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Large raw VISSIM files
+data/raw_data/vissim_results/*
+*.fzp
+*.lsa
+
+# Generated processed data and outputs
+data/processed_data/*
+output/figures/*
+output/results/*
+output/models/*
+output/corrected_curves/*
+
+# Model artifacts
+*.joblib
+*.pkl
+*.pickle
