@@ -45,7 +45,7 @@ Hybrid_CV_Queue_Reconstruction/
 
 ## Workflow
 
-
+```text
 Raw VISSIM FZP/LSA Files
         ↓
 Preprocess VISSIM Data
@@ -63,8 +63,7 @@ Feature Engineering and XGBoost Residual Prediction
 CV Anchor-Based Segment Correction
         ↓
 Evaluation and Plotting
-
-## Scripts
+```
 
 ## Scripts
 
@@ -85,3 +84,68 @@ The `evaluation.py` file evaluates the baseline and corrected curves against the
 The `plot.py` file generates selected figures directly from saved CSV files. Plot type, color style, zoom window, selected run, and selected CV penetration rate can be controlled from the setup section at the top of the file.
 
 The `run_pipeline.py` file runs the full calculation workflow in the correct order. Plotting is kept separate and should be run using `plot.py`.
+
+## Data
+
+The raw data consist of vehicle trajectory and signal timing outputs extracted from PTV VISSIM after modeling a real-world signalized intersection corridor.
+
+The raw VISSIM files should be placed in:
+
+```text
+data/raw_data/vissim_results/
+```
+
+
+## Installation
+
+Create and activate a Python environment, then install the required packages:
+
+```bash
+pip install -r requirements.txt
+```
+
+## Usage
+
+To run the full calculation pipeline, use:
+
+```bash
+python src/run_pipeline.py
+```
+
+To run each stage separately, use:
+
+```bash
+python src/preprocess_vissim.py
+python src/ground_truth_queue.py
+python src/cumulative_count_theory.py
+python src/cv_ml_pipeline.py
+python src/cv_anchor_correction.py
+python src/evaluation.py
+```
+
+To generate selected plots, edit the plot configuration section at the top of `src/plot.py`, then run:
+
+```bash
+python src/plot.py
+```
+
+## Expected Outputs
+
+After running the pipeline, the main processed files are saved in `data/processed_data/`. These include the filtered trajectory file, GT queue-join files, cumulative curve files, CV allocation files, feature files, and raw prediction files.
+
+Final corrected curve files are saved in:
+
+```text
+output/corrected_curves/
+```
+
+## Notes and Limitations
+
+The full VISSIM trajectory and signal files are not included in this repository because they may be large. The repository is designed so that raw data can be placed locally in the expected folder structure before running the pipeline.
+
+The train/test split is performed strictly by simulation run to avoid vehicle-level leakage. Runs 005–010 are used for training, and runs 011–014 are used for testing.
+
+The CV penetration rates evaluated in this project are 1%, 2%, 5%, 10%, 20%, 50%, and 100%.
+
+
+
