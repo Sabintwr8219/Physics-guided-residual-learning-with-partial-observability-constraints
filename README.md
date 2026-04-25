@@ -37,7 +37,6 @@ Hybrid_CV_Queue_Reconstruction/
 │   ├── plot.py
 │   └── run_pipeline.py
 │
-├── doc/
 ├── requirements.txt
 └── README.md
 ```
