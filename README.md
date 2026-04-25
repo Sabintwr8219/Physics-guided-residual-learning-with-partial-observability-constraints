@@ -8,7 +8,6 @@ The data are extracted from a calibrated PTV VISSIM simulation model of a real-w
 
 The final objective is to compare the baseline cumulative-count method with the CV-constrained machine learning correction using evaluation metrics such as MAE, RMSE, area between curves, and maximum absolute error.
 
-## Repository Structure
 
 ## Repository Structure
 
