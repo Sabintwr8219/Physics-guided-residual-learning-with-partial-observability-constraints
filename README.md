@@ -1,4 +1,4 @@
-# Hybrid CV-Constrained Cumulative Curve Framework for Queue Reconstruction
+# Physics-guided residual learning with partial observability constraints
 
 ## Project Overview
 
