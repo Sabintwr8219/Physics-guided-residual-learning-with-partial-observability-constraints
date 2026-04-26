@@ -1,0 +1,5 @@
+training_fraction,n_repeats,n_train_rows_mean,baseline_mae_sec,baseline_rmse_sec,model_mae_sec_mean,model_mae_sec_std,model_rmse_sec_mean,model_rmse_sec_std,mae_improvement_sec_mean,rmse_improvement_sec_mean,n_eval
+0.25,3,13748.0,18.4145,22.0988,6.609,0.0557,11.0134,0.0594,11.8056,11.0854,36694.0
+0.5,3,27524.0,18.4145,22.0988,6.2802,0.1058,10.773,0.0471,12.1344,11.3257,36694.0
+0.75,3,41293.0,18.4145,22.0988,6.2275,0.0157,10.751,0.0068,12.1871,11.3478,36694.0
+1.0,3,55069.0,18.4145,22.0988,6.1905,0.0129,10.7087,0.0085,12.224,11.3901,36694.0
