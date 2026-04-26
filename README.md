@@ -36,6 +36,7 @@ Hybrid_CV_Queue_Reconstruction/
 │   ├── evaluation.py
 │   ├── plot.py
 │   └── run_pipeline.py
+|   └── robustness_check.py
 │
 ├── requirements.txt
 └── README.md
@@ -61,6 +62,8 @@ Feature Engineering and XGBoost Residual Prediction
 CV Anchor-Based Segment Correction
         ↓
 Evaluation and Plotting
+        ↓
+Robustness Check
 ```
 
 ## Scripts
@@ -78,6 +81,8 @@ The `cv_ml_pipeline.py` file creates CV allocation files for all penetration rat
 The `cv_anchor_correction.py` file applies the CV anchor-based segment correction. It uses CV points and boundary anchors to rescale the raw ML prediction curve and save the final corrected curve files.
 
 The `evaluation.py` file evaluates the baseline and corrected curves against the ground-truth curve using MAE, RMSE, area between curves, and maximum absolute error.
+
+The `robustness_check.py` file performs additional robustness testing after the main evaluation. It checks model stability under reduced training-data size and controlled feature noise, then saves two summary tables in `output/results/`.
 
 The `plot.py` file generates selected figures directly from saved CSV files. Plot type, color style, zoom window, selected run, and selected CV penetration rate can be controlled from the setup section at the top of the file.
 
@@ -136,6 +141,11 @@ Final corrected curve files are saved in:
 ```text
 output/corrected_curves/
 ```
+Robustness check outputs are saved in:
+
+```text
+output/results/robustness_data_size.csv
+output/results/robustness_noise.csv
 
 ## Notes and Limitations
 
