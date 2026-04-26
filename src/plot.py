@@ -24,6 +24,7 @@ from config import (
     Y_UPSTREAM_DETECTOR_FT,
     Y_STOPBAR_FT,
     M_TO_FT,
+    RESULTS_DIR,
     ensure_project_directories,
 )
 
@@ -72,6 +73,7 @@ PLOT_GT_CURVE = True
 PLOT_ADVB_CURVES = True
 PLOT_CV_DOTS_ON_BASELINE = True
 PLOT_FINAL_BASELINE_GT_CORRECTED = True
+PLOT_FINAL_EVALUATION_TABLE = True
 
 
 # ============================================================
@@ -124,6 +126,8 @@ GT_FIG_NAME = "gt_cumulative_curve_run{run_id:03d}.png"
 ADVB_FIG_NAME = "advb_curves_run{run_id:03d}.png"
 CV_DOT_FIG_NAME = "baseline_with_cv_points_run{run_id:03d}_rate{rate:03d}.png"
 FINAL_FIG_NAME = "baseline_gt_corrected_run{run_id:03d}_rate{rate:03d}.png"
+FINAL_EVALUATION_TABLE_CSV = RESULTS_DIR / "final_evaluation_table_test_only.csv"
+FINAL_EVALUATION_TABLE_FIG_NAME = "final_evaluation_table_test_only.png"
 
 
 # ============================================================
@@ -634,7 +638,76 @@ def plot_final_baseline_gt_corrected(run_id: int, rate_pct: int) -> None:
 
     filename = FINAL_FIG_NAME.format(run_id=run_id, rate=rate_pct)
     save_or_show(fig, filename)
+    
+# ============================================================
+# Plot 6: Final evaluation table as figure
+# ============================================================
+def plot_final_evaluation_table() -> None:
+    """
+    Plot the final test-only evaluation table as a figure.
 
+    Reads:
+        output/results/final_evaluation_table_test_only.csv
+
+    Saves:
+        output/figures/final_evaluation_table_test_only.png
+    """
+    if not FINAL_EVALUATION_TABLE_CSV.exists():
+        raise FileNotFoundError(
+            f"Missing final evaluation table:\n{FINAL_EVALUATION_TABLE_CSV}\n"
+            "Run evaluation.py first."
+        )
+
+    df = pd.read_csv(FINAL_EVALUATION_TABLE_CSV)
+
+    # Keep the clean report columns. Adjust here if the table becomes too wide.
+    preferred_cols = [
+        "CV Penetration Rate (%)",
+        "Baseline MAE (s)",
+        "Corrected MAE (s)",
+        "MAE Improvement (s)",
+        "Baseline RMSE (s)",
+        "Corrected RMSE (s)",
+        "RMSE Improvement (s)",
+        "Baseline ABC (veh-s)",
+        "Corrected ABC (veh-s)",
+        "ABC Improvement (veh-s)",
+    ]
+
+    cols = [c for c in preferred_cols if c in df.columns]
+    table_df = df[cols].copy()
+
+    # Round numeric values for display.
+    for col in table_df.columns:
+        if pd.api.types.is_numeric_dtype(table_df[col]):
+            table_df[col] = table_df[col].round(3)
+
+    fig_width = max(12, 1.35 * len(table_df.columns))
+    fig_height = max(3.5, 0.45 * len(table_df) + 1.5)
+
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+    ax.axis("off")
+
+    table = ax.table(
+        cellText=table_df.values,
+        colLabels=table_df.columns,
+        cellLoc="center",
+        colLoc="center",
+        loc="center",
+    )
+
+    table.auto_set_font_size(False)
+    table.set_fontsize(8)
+    table.scale(1.0, 1.35)
+
+    ax.set_title(
+        "Final Evaluation Summary on Test Runs",
+        fontsize=12,
+        fontweight="bold",
+        pad=12,
+    )
+
+    save_or_show(fig, FINAL_EVALUATION_TABLE_FIG_NAME)
 
 # ============================================================
 # Main
@@ -676,6 +749,9 @@ def run_selected_plots() -> None:
 
     if PLOT_FINAL_BASELINE_GT_CORRECTED:
         plot_final_baseline_gt_corrected(RUN_ID, CV_RATE_PCT)
+        
+    if PLOT_FINAL_EVALUATION_TABLE:
+        plot_final_evaluation_table()
 
     print("\nPlotting complete.")
 

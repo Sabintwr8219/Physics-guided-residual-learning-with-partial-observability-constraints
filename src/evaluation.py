@@ -16,6 +16,7 @@ Outputs:
     output/results/evaluation_by_run_and_rate.csv
     output/results/evaluation_summary_by_rate.csv
     output/results/evaluation_summary_by_split.csv
+    output/results/final_evaluation_table_test_only.csv
 """
 
 from __future__ import annotations
@@ -37,7 +38,7 @@ from config import (
     ensure_project_directories,
 )
 
-
+FINAL_EVALUATION_TABLE_CSV = EVALUATION_BY_RUN_RATE_CSV.parent / "final_evaluation_table_test_only.csv"
 # ============================================================
 # Helpers
 # ============================================================
@@ -459,6 +460,70 @@ def summarize_by_split(evaluation_df: pd.DataFrame) -> pd.DataFrame:
 
     return summary
 
+def build_final_report_table(evaluation_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Build a clean final evaluation table for the report.
+
+    Uses test runs only.
+    One row is reported for each CV penetration rate.
+    """
+    test_df = evaluation_df[evaluation_df["split"] == "test"].copy()
+
+    if test_df.empty:
+        raise ValueError("No test rows found for final evaluation table.")
+
+    summary = (
+        test_df
+        .groupby("cv_rate_pct", as_index=False)
+        .agg(
+            n_test_runs=("run_id", "nunique"),
+
+            mae_baseline_sec=("mae_baseline_sec", "mean"),
+            mae_corrected_sec=("mae_corrected_sec", "mean"),
+            mae_improvement_sec=("mae_improvement_sec", "mean"),
+
+            rmse_baseline_sec=("rmse_baseline_sec", "mean"),
+            rmse_corrected_sec=("rmse_corrected_sec", "mean"),
+            rmse_improvement_sec=("rmse_improvement_sec", "mean"),
+
+            maxae_baseline_sec=("maxae_baseline_sec", "mean"),
+            maxae_corrected_sec=("maxae_corrected_sec", "mean"),
+            maxae_improvement_sec=("maxae_improvement_sec", "mean"),
+
+            abc_baseline_vehicle_sec=("abc_baseline_vehicle_sec", "mean"),
+            abc_corrected_vehicle_sec=("abc_corrected_vehicle_sec", "mean"),
+            abc_improvement_vehicle_sec=("abc_improvement_vehicle_sec", "mean"),
+        )
+    )
+
+    summary = summary.rename(
+        columns={
+            "cv_rate_pct": "CV Penetration Rate (%)",
+            "n_test_runs": "Number of Test Runs",
+
+            "mae_baseline_sec": "Baseline MAE (s)",
+            "mae_corrected_sec": "Corrected MAE (s)",
+            "mae_improvement_sec": "MAE Improvement (s)",
+
+            "rmse_baseline_sec": "Baseline RMSE (s)",
+            "rmse_corrected_sec": "Corrected RMSE (s)",
+            "rmse_improvement_sec": "RMSE Improvement (s)",
+
+            "maxae_baseline_sec": "Baseline MaxAE (s)",
+            "maxae_corrected_sec": "Corrected MaxAE (s)",
+            "maxae_improvement_sec": "MaxAE Improvement (s)",
+
+            "abc_baseline_vehicle_sec": "Baseline ABC (veh-s)",
+            "abc_corrected_vehicle_sec": "Corrected ABC (veh-s)",
+            "abc_improvement_vehicle_sec": "ABC Improvement (veh-s)",
+        }
+    )
+
+    numeric_cols = summary.select_dtypes(include=[np.number]).columns
+    summary[numeric_cols] = summary[numeric_cols].round(3)
+
+    return summary
+
 
 def run_evaluation() -> None:
     """
@@ -505,11 +570,15 @@ def run_evaluation() -> None:
 
     summary_by_split = summarize_by_split(evaluation_df)
     summary_by_split.to_csv(EVALUATION_SUMMARY_BY_SPLIT_CSV, index=False)
+    
+    final_report_table = build_final_report_table(evaluation_df)
+    final_report_table.to_csv(FINAL_EVALUATION_TABLE_CSV, index=False)
 
     print("\nEvaluation complete.")
     print(f"Saved run/rate evaluation : {EVALUATION_BY_RUN_RATE_CSV}")
     print(f"Saved rate summary        : {EVALUATION_SUMMARY_BY_RATE_CSV}")
     print(f"Saved split summary       : {EVALUATION_SUMMARY_BY_SPLIT_CSV}")
+    print(f"Saved final report table   : {FINAL_EVALUATION_TABLE_CSV}")
 
 
 def main() -> None:

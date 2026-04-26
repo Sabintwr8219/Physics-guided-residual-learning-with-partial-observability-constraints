@@ -1,4 +1,4 @@
-# Python
+# Python cache
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -10,25 +10,22 @@ venv/
 env/
 dnn_env/
 
-# IDE/system
+# IDE/system files
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
 
-# Large raw VISSIM files
+# Raw VISSIM files
 data/raw_data/vissim_results/*
 *.fzp
 *.lsa
 
-# Generated processed data and outputs
+# Large processed/intermediate data
 data/processed_data/*
-output/figures/*
-output/results/*
-output/models/*
-output/corrected_curves/*
 
-# Model artifacts
+# Do not upload saved model files
+output/models/*
 *.joblib
 *.pkl
 *.pickle
