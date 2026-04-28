@@ -23,9 +23,12 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import joblib
+import matplotlib.pyplot as plt
+
 
 from xgboost import XGBRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error
+from sklearn.model_selection import RandomizedSearchCV, GroupKFold
 
 from config import (
     RUN_IDS,
@@ -54,6 +57,8 @@ from config import (
     XGB_RANDOM_STATE,
     XGB_OBJECTIVE,
     M_TO_FT,
+    FIGURES_DIR,
+    RESULTS_DIR,
     ensure_project_directories,
 )
 
@@ -68,7 +73,23 @@ NESTED_CV_SAMPLING = True
 
 TRAJ_CHUNKSIZE = 300_000
 
+# ============================================================
+# ML diagnostics and hyperparameter tuning settings
+# ============================================================
 
+RUN_FEATURE_CORRELATION_DIAGNOSTIC = False
+RUN_FEATURE_IMPORTANCE_DIAGNOSTIC = True
+RUN_HYPERPARAMETER_TUNING = True
+
+XGB_FEATURE_IMPORTANCE_CSV = RESULTS_DIR / "xgb_feature_importance.csv"
+XGB_FEATURE_IMPORTANCE_FIG = FIGURES_DIR / "xgb_feature_importance.png"
+TOP_N_FEATURES_TO_PLOT = 10
+
+XGB_TUNING_RESULTS_CSV = RESULTS_DIR / "xgb_hyperparameter_tuning_results.csv"
+
+TUNING_N_ITER = 12
+TUNING_CV_SPLITS = 3
+TUNING_SCORING = "neg_root_mean_squared_error"
 # ============================================================
 # General helpers
 # ============================================================
@@ -144,7 +165,153 @@ def compute_metrics(y_true, y_pred) -> tuple[float, float]:
 
     return mae, rmse
 
+def save_feature_correlation_diagnostic(event_df: pd.DataFrame, feature_cols: list[str]) -> None:
+    """
+    Compute, save, and plot the feature correlation matrix.
 
+    This diagnostic uses the same feature columns that are fed into the
+    XGBoost residual model.
+    """
+    print("=" * 80)
+    print("Saving feature correlation diagnostics")
+    print("=" * 80)
+
+    feature_df = event_df[feature_cols].copy()
+
+    for col in feature_cols:
+        feature_df[col] = pd.to_numeric(feature_df[col], errors="coerce")
+
+    feature_df = feature_df.dropna(axis=0, how="any")
+
+    if feature_df.empty:
+        raise ValueError("Feature dataframe is empty after numeric conversion.")
+
+    corr = feature_df.corr(method="pearson")
+
+    FEATURE_CORRELATION_CSV.parent.mkdir(parents=True, exist_ok=True)
+    corr.to_csv(FEATURE_CORRELATION_CSV)
+
+    fig_size = max(8, 0.45 * len(corr.columns))
+    fig, ax = plt.subplots(figsize=(fig_size, fig_size))
+
+    image = ax.imshow(corr.values, vmin=-1, vmax=1)
+    fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04)
+
+    ax.set_xticks(np.arange(len(corr.columns)))
+    ax.set_yticks(np.arange(len(corr.index)))
+
+    ax.set_xticklabels(corr.columns, rotation=90, fontsize=8)
+    ax.set_yticklabels(corr.index, fontsize=8)
+
+    ax.set_title("Feature Correlation Matrix", fontsize=12, fontweight="bold")
+
+    plt.tight_layout()
+
+    FEATURE_CORRELATION_FIG.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(FEATURE_CORRELATION_FIG, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+    print(f"[Saved] Correlation matrix CSV : {FEATURE_CORRELATION_CSV}")
+    print(f"[Saved] Correlation matrix plot: {FEATURE_CORRELATION_FIG}")
+
+    high_corr_pairs = []
+
+    cols = list(corr.columns)
+
+    for i in range(len(cols)):
+        for j in range(i + 1, len(cols)):
+            value = corr.iloc[i, j]
+
+            if pd.notna(value) and abs(value) >= 0.80:
+                high_corr_pairs.append(
+                    {
+                        "feature_1": cols[i],
+                        "feature_2": cols[j],
+                        "correlation": float(value),
+                    }
+                )
+
+    if high_corr_pairs:
+        high_corr_df = pd.DataFrame(high_corr_pairs).sort_values(
+            "correlation",
+            key=lambda x: x.abs(),
+            ascending=False,
+        )
+
+        print("\nHighly correlated feature pairs with |r| >= 0.80:")
+        print(high_corr_df.to_string(index=False))
+    else:
+        print("\nNo feature pairs found with |r| >= 0.80.")
+
+def save_xgb_feature_importance(
+    model: XGBRegressor,
+    feature_cols: list[str],
+) -> None:
+    """
+    Save and plot XGBoost feature importance.
+
+    This diagnostic shows which engineered features contributed most to the
+    residual prediction model.
+    """
+    print("=" * 80)
+    print("Saving XGBoost feature importance diagnostic")
+    print("=" * 80)
+
+    if not hasattr(model, "feature_importances_"):
+        raise ValueError("The trained model does not expose feature_importances_.")
+
+    importance = np.asarray(model.feature_importances_, dtype=float)
+
+    if len(importance) != len(feature_cols):
+        raise ValueError(
+            "Feature importance length does not match number of feature columns."
+        )
+
+    importance_df = pd.DataFrame(
+        {
+            "feature": feature_cols,
+            "importance": importance,
+        }
+    )
+
+    importance_df = importance_df.sort_values(
+        "importance",
+        ascending=False,
+    ).reset_index(drop=True)
+
+    importance_df["rank"] = np.arange(1, len(importance_df) + 1)
+
+    XGB_FEATURE_IMPORTANCE_CSV.parent.mkdir(parents=True, exist_ok=True)
+    importance_df.to_csv(XGB_FEATURE_IMPORTANCE_CSV, index=False)
+
+    top_df = importance_df.head(TOP_N_FEATURES_TO_PLOT).copy()
+    top_df = top_df.sort_values("importance", ascending=True)
+
+    fig_height = max(4, 0.45 * len(top_df))
+    fig, ax = plt.subplots(figsize=(9, fig_height))
+
+    ax.barh(
+        top_df["feature"],
+        top_df["importance"],
+    )
+
+    ax.set_xlabel("Feature importance")
+    ax.set_ylabel("Feature")
+    ax.set_title("Top XGBoost Feature Importances")
+    ax.grid(True, axis="x", linestyle=":", linewidth=0.7, alpha=0.7)
+
+    plt.tight_layout()
+
+    XGB_FEATURE_IMPORTANCE_FIG.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(XGB_FEATURE_IMPORTANCE_FIG, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+    print(f"[Saved] Feature importance CSV : {XGB_FEATURE_IMPORTANCE_CSV}")
+    print(f"[Saved] Feature importance plot: {XGB_FEATURE_IMPORTANCE_FIG}")
+
+    print("\nTop feature importances:")
+    print(importance_df.head(TOP_N_FEATURES_TO_PLOT).to_string(index=False))
+    
 # ============================================================
 # Loading shared inputs
 # ============================================================
@@ -999,6 +1166,81 @@ def build_event_features_allrates() -> tuple[pd.DataFrame, list[str]]:
 # ============================================================
 # Global XGBoost model training and raw prediction
 # ============================================================
+def tune_xgboost_hyperparameters(
+    train_df: pd.DataFrame,
+    feature_cols: list[str],
+) -> dict:
+    """
+    Tune XGBoost hyperparameters using training runs only.
+
+    GroupKFold is used with run_id as the group variable so that rows from
+    the same simulation run are not split across validation folds.
+    """
+    print("=" * 80)
+    print("Running XGBoost hyperparameter tuning")
+    print("=" * 80)
+
+    x_train = train_df[feature_cols].copy()
+    y_train = train_df["resid_true_minus_base_sec"].to_numpy(dtype=float)
+    groups = train_df["run_id"].to_numpy(dtype=int)
+
+    n_unique_runs = train_df["run_id"].nunique()
+    n_splits = min(TUNING_CV_SPLITS, n_unique_runs)
+
+    if n_splits < 2:
+        raise ValueError("At least two training runs are needed for GroupKFold tuning.")
+
+    cv = GroupKFold(n_splits=n_splits)
+
+    base_model = XGBRegressor(
+        objective=XGB_OBJECTIVE,
+        random_state=XGB_RANDOM_STATE,
+        n_jobs=-1,
+    )
+
+    param_distributions = {
+        "n_estimators": [200, 300, 400],
+        "learning_rate": [0.03, 0.05, 0.08],
+        "max_depth": [2, 3, 4],
+        "subsample": [0.70, 0.80, 1.00],
+        "colsample_bytree": [0.80, 0.90, 1.00],
+        "min_child_weight": [1, 3, 5],
+    }
+
+    search = RandomizedSearchCV(
+        estimator=base_model,
+        param_distributions=param_distributions,
+        n_iter=TUNING_N_ITER,
+        scoring=TUNING_SCORING,
+        cv=cv,
+        random_state=RANDOM_SEED,
+        n_jobs=1,
+        verbose=1,
+        refit=False,
+    )
+
+    search.fit(x_train, y_train, groups=groups)
+
+    results = pd.DataFrame(search.cv_results_)
+
+    results["mean_test_rmse"] = -results["mean_test_score"]
+    results["std_test_rmse"] = results["std_test_score"].abs()
+
+    XGB_TUNING_RESULTS_CSV.parent.mkdir(parents=True, exist_ok=True)
+    results.to_csv(XGB_TUNING_RESULTS_CSV, index=False)
+
+    best_params = search.best_params_
+
+    print(f"[Saved] Tuning results: {XGB_TUNING_RESULTS_CSV}")
+    print("\nBest XGBoost parameters:")
+    for key, value in best_params.items():
+        print(f"  {key}: {value}")
+
+    print(f"\nBest CV RMSE: {-search.best_score_:.4f}")
+
+    return best_params
+
+
 
 def train_global_xgboost_model(event_all: pd.DataFrame, feature_cols: list[str]) -> None:
     """
@@ -1019,18 +1261,28 @@ def train_global_xgboost_model(event_all: pd.DataFrame, feature_cols: list[str])
     x_train = train_df[feature_cols].copy()
     y_train = train_df["resid_true_minus_base_sec"].to_numpy(dtype=float)
 
+    if RUN_HYPERPARAMETER_TUNING:
+        best_params = tune_xgboost_hyperparameters(train_df, feature_cols)
+    else:
+        best_params = {
+            "n_estimators": XGB_N_ESTIMATORS,
+            "learning_rate": XGB_LEARNING_RATE,
+            "max_depth": XGB_MAX_DEPTH,
+            "subsample": XGB_SUBSAMPLE,
+            "colsample_bytree": XGB_COLSAMPLE_BYTREE,
+        }
+
     model = XGBRegressor(
-        n_estimators=XGB_N_ESTIMATORS,
-        learning_rate=XGB_LEARNING_RATE,
-        max_depth=XGB_MAX_DEPTH,
-        subsample=XGB_SUBSAMPLE,
-        colsample_bytree=XGB_COLSAMPLE_BYTREE,
+        **best_params,
         random_state=XGB_RANDOM_STATE,
         objective=XGB_OBJECTIVE,
         n_jobs=-1,
     )
 
     model.fit(x_train, y_train)
+    
+    if RUN_FEATURE_IMPORTANCE_DIAGNOSTIC:
+        save_xgb_feature_importance(model, feature_cols)
 
     x_all = model_df[feature_cols].copy()
     model_df["pred_resid_join_sec"] = model.predict(x_all)
@@ -1068,6 +1320,8 @@ def train_global_xgboost_model(event_all: pd.DataFrame, feature_cols: list[str])
             "test_run_ids": TEST_RUN_IDS,
             "cv_rates_pct": CV_RATES_PCT,
             "random_seed": RANDOM_SEED,
+            "best_params": best_params,
+            "hyperparameter_tuning_used": RUN_HYPERPARAMETER_TUNING,
         },
         XGB_MODEL_FILE,
     )
@@ -1125,8 +1379,11 @@ def run_cv_ml_pipeline() -> None:
     create_cv_allocation_files()
     build_timegrid_features_for_all_rates()
     event_all, feature_cols = build_event_features_allrates()
-    train_global_xgboost_model(event_all, feature_cols)
 
+    if RUN_FEATURE_CORRELATION_DIAGNOSTIC:
+        save_feature_correlation_diagnostic(event_all, feature_cols)
+
+    train_global_xgboost_model(event_all, feature_cols)
     print("\nCV + ML pipeline complete.")
 
 

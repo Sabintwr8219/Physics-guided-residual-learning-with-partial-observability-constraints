@@ -40,7 +40,7 @@ CV_RATE_PCT = 10
 # Plot style:
 #   "bw"    = black-and-white journal style
 #   "color" = color figures
-PLOT_STYLE = "bw"
+PLOT_STYLE = "color"
 
 # Time display:
 #   "full"   = full simulation period
@@ -94,9 +94,9 @@ SHOW_START_END_DOTS = True
 # A/D/V/B CUMULATIVE CURVE CONFIGURATION
 # ============================================================
 
-PLOT_A = True
-PLOT_D = True
-PLOT_V = True
+PLOT_A = False
+PLOT_D = False
+PLOT_V = False
 PLOT_B = True
 
 
